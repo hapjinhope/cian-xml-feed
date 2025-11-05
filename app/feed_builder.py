@@ -90,6 +90,18 @@ def _collect_phones(*sources: Any) -> list[str]:
     return phones
 
 
+def _split_phone(phone: str) -> tuple[str, str] | None:
+    digits = re.sub(r"\D", "", phone)
+    if not digits:
+        return None
+    if len(digits) <= 10:
+        number = digits.zfill(10)
+        return "+7", number
+    country_digits = digits[:-10] or "7"
+    number_digits = digits[-10:]
+    return f"+{country_digits}", number_digits
+
+
 def _split_items(text: str | None) -> list[str]:
     if not text:
         return []
@@ -355,8 +367,13 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
                 ET.SubElement(contact, "Name").text = escape_xml(contact_name)
             phones_el = ET.SubElement(contact, "Phones")
             for phone in phones:
-                phone_el = ET.SubElement(phones_el, "Phone")
-                ET.SubElement(phone_el, "Number").text = phone
+                phone_parts = _split_phone(phone)
+                if not phone_parts:
+                    continue
+                country_code, local_number = phone_parts
+                phone_el = ET.SubElement(phones_el, "PhoneSchema")
+                ET.SubElement(phone_el, "CountryCode").text = country_code
+                ET.SubElement(phone_el, "Number").text = local_number
             if contact_email:
                 ET.SubElement(contact, "Email").text = escape_xml(contact_email)
 
