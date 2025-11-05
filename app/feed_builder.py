@@ -4,8 +4,21 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
-from typing import Any
+from typing import Any, Iterable
 from xml.dom import minidom
+
+AMENITY_MAP = {
+    "Холодильник": "Fridge",
+    "Посудомоечная машина": "Dishwasher",
+    "Стиральная машина": "Washer",
+    "Кондиционер": "Conditioner",
+    "Телевизор": "TV",
+    "Интернет": "Internet",
+    "Ванна": "Bath",
+    "Душевая кабина": "Shower",
+    "Мебель на кухне": "KitchenFurniture",
+    "Мебель в комнатах": "RoomFurniture",
+}
 
 
 def escape_xml(text: str | None) -> str:
@@ -77,6 +90,20 @@ def _collect_phones(*sources: Any) -> list[str]:
     return phones
 
 
+def _split_items(text: str | None) -> list[str]:
+    if not text:
+        return []
+    items = re.split(r"[,\n;]+", text)
+    return [item.strip() for item in items if item.strip()]
+
+
+def _parse_amenities(text: str | None) -> list[str]:
+    amenities: list[str] = []
+    for item in _split_items(text):
+        amenities.append(AMENITY_MAP.get(item, item))
+    return amenities
+
+
 def build_feed(apartments: list[dict[str, Any]]) -> str:
     """Generate XML feed document."""
 
@@ -142,21 +169,34 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
         ET.SubElement(bargain, "BargainStatus").text = "approved"
 
         photos = ET.SubElement(obj, "Photos")
+        photo_urls: list[str] = []
         main_photo = apt.get("main_photo_url")
         if main_photo:
-            ET.SubElement(photos, "Photo").text = escape_xml(main_photo)
+            photo_urls.append(str(main_photo))
 
         photos_json = apt.get("photos_json")
         if isinstance(photos_json, dict):
-            iterable = photos_json.values()
+            iterable: Iterable[Any] = photos_json.values()
         elif isinstance(photos_json, list):
             iterable = photos_json
         else:
             iterable = []
 
         for url in iterable:
-            if url and url != main_photo:
-                ET.SubElement(photos, "Photo").text = escape_xml(url)
+            if url:
+                url_str = str(url)
+                if url_str not in photo_urls:
+                    photo_urls.append(url_str)
+
+        def add_photo(url: str, is_main: bool) -> None:
+            photo_el = ET.SubElement(photos, "Photo")
+            ET.SubElement(photo_el, "FullUrl").text = escape_xml(url)
+            ET.SubElement(photo_el, "IsDefault").text = "true" if is_main else "false"
+
+        if photo_urls:
+            add_photo(photo_urls[0], True)
+            for extra in photo_urls[1:]:
+                add_photo(extra, False)
 
         ET.SubElement(obj, "PromotionType").text = (
             apt.get("promotion_type") or "noPromotion"
@@ -175,16 +215,15 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
             apt.get("agent_phone"),
         )
 
-        if contact_name or contact_email or phones:
+        if phones:
             contacts = ET.SubElement(obj, "Contacts")
             contact = ET.SubElement(contacts, "Contact")
             if contact_name:
                 ET.SubElement(contact, "Name").text = escape_xml(contact_name)
-            if phones:
-                phones_el = ET.SubElement(contact, "Phones")
-                for phone in phones:
-                    phone_el = ET.SubElement(phones_el, "Phone")
-                    ET.SubElement(phone_el, "Number").text = phone
+            phones_el = ET.SubElement(contact, "Phones")
+            for phone in phones:
+                phone_el = ET.SubElement(phones_el, "Phone")
+                ET.SubElement(phone_el, "Number").text = phone
             if contact_email:
                 ET.SubElement(contact, "Email").text = escape_xml(contact_email)
 
@@ -199,6 +238,12 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
             year_match = re.search(r"Год:\s*(\d{4})", house_details)
             if year_match:
                 ET.SubElement(building, "BuildYear").text = year_match.group(1)
+
+        amenities = _parse_amenities(apt.get("apartment_amenities"))
+        if amenities:
+            amenities_el = ET.SubElement(obj, "FlatAmenities")
+            for amenity in amenities:
+                ET.SubElement(amenities_el, "Amenity").text = amenity
 
     xml_bytes = ET.tostring(feed, encoding="utf-8")
     xml_str = minidom.parseString(xml_bytes).toprettyxml(
