@@ -483,13 +483,13 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
 
         agent_info = apt.get("agent") or {}
 
-        sub_first = apt.get("subagent_first_name")
-        sub_last = apt.get("subagent_last_name")
+        sub_first = apt.get("subagent_first_name") or agent_info.get("first_name")
+        sub_last = apt.get("subagent_last_name") or agent_info.get("last_name")
         sub_email = apt.get("subagent_email")
         sub_phone = apt.get("subagent_phone")
         sub_avatar = apt.get("subagent_avatar_url")
 
-        if not sub_first and agent_info.get("name"):
+        if (not sub_first or not sub_last) and agent_info.get("name"):
             name_parts = agent_info["name"].strip().split(maxsplit=1)
             if name_parts:
                 sub_first = sub_first or name_parts[0]
