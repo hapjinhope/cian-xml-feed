@@ -494,7 +494,13 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
             apt.get("agent_phone"),
         )
 
-        if phones:
+        sub_first = apt.get("subagent_first_name")
+        sub_last = apt.get("subagent_last_name")
+        sub_email = apt.get("subagent_email")
+        sub_phone = apt.get("subagent_phone")
+        sub_avatar = apt.get("subagent_avatar_url")
+
+        if phones and (sub_first or sub_last or sub_email or sub_phone or sub_avatar):
             contacts = ET.SubElement(obj, "Contacts")
             contact = ET.SubElement(contacts, "Contact")
             if contact_name:
@@ -510,12 +516,6 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
                 ET.SubElement(phone_el, "Number").text = local_number
             if contact_email:
                 ET.SubElement(contact, "Email").text = escape_xml(contact_email)
-
-        sub_first = apt.get("subagent_first_name")
-        sub_last = apt.get("subagent_last_name")
-        sub_email = apt.get("subagent_email")
-        sub_phone = apt.get("subagent_phone")
-        sub_avatar = apt.get("subagent_avatar_url")
 
         if not sub_first and agent_info.get("name"):
             name_parts = agent_info["name"].strip().split(maxsplit=1)
