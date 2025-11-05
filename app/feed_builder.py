@@ -183,7 +183,8 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
             if phones:
                 phones_el = ET.SubElement(contact, "Phones")
                 for phone in phones:
-                    ET.SubElement(phones_el, "Phone").text = phone
+                    phone_el = ET.SubElement(phones_el, "Phone")
+                    ET.SubElement(phone_el, "Number").text = phone
             if contact_email:
                 ET.SubElement(contact, "Email").text = escape_xml(contact_email)
 
