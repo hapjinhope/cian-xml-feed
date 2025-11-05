@@ -1,0 +1,47 @@
+[14:35:34] INFO: Начало генерации XML фида
+[14:35:34] INFO: URL Supabase: https://jdzjdpgznihzasieinlt.supabase.co
+[14:35:35] INFO: ✅ Supabase: подключено, найдено объектов: 1
+[14:35:35] INFO: 
+✅ Успешно загружено объектов: 1
+
+[14:35:35] INFO: 
+============================================================
+📍 ОБЪЕКТ #1
+============================================================
+[14:35:35] INFO:   ✅ Category: flatRent
+[14:35:35] INFO:   ✅ ExternalId: 1
+[14:35:35] INFO:   ✅ Description: 911 символов
+[14:35:35] INFO:   ✅ Address: Москва, САО, р-н Беговой, Ленинградский просп., 29к3
+[14:35:35] INFO:   ✅ FlatRoomsCount: 3
+[14:35:35] INFO:   ✅ FloorNumber: 10
+[14:35:35] INFO:   ✅ TotalArea: 90
+[14:35:35] INFO:   ✅ LivingArea: 40
+[14:35:35] INFO:   ✅ KitchenArea: 40
+[14:35:35] INFO:   ✅ BalconiesCount: 2
+[14:35:35] INFO:   ✅ WindowsViewType: На улицу и двор
+[14:35:35] INFO:   ✅ RepairType: Дизайнерский
+[14:35:35] INFO:   ✅ HasInternet: True
+[14:35:35] INFO:   ✅ HasFurniture: True
+[14:35:35] INFO:   ✅ HasKitchenFurniture: True
+[14:35:35] INFO:   ✅ HasTv: True
+[14:35:35] INFO:   ✅ HasWasher: True
+[14:35:35] INFO:   ✅ HasConditioner: True
+[14:35:35] INFO:   ✅ HasBathtub: True
+[14:35:35] INFO:   ✅ HasShower: True
+[14:35:35] INFO:   ✅ HasDishwasher: True
+[14:35:35] INFO:   ✅ HasFridge: True
+[14:35:35] INFO:   ✅ BuildYear: 2018
+[14:35:35] INFO:   ✅ CeilingHeight: 3
+[14:35:35] INFO:   ✅ ParkingType: Подземная
+[14:35:35] INFO:   ✅ Всего фотографий: 42
+[14:35:35] INFO:   ✅ Agent загружен: ID 132466118
+[14:35:35] INFO:       Email: katalog@happinessclub.city
+[14:35:35] INFO:       FirstName: —
+[14:35:35] INFO:       LastName: —
+[14:35:35] INFO:       Phone: +79121434666
+[14:35:35] INFO:   ✅ Email: katalog@happinessclub.city
+[14:35:35] INFO:   ✅ Phone: +79121434666
+[14:35:35] INFO:   ✅ FirstName: каталог
+[14:35:35] INFO:   ✅ LastName: HAPPINESS
+[14:35:35] INFO:   ⚠️ AvatarUrl: пусто
+[14:35:35] INFO: ✅ XML сохранён в feed.xml (10323 символов)
