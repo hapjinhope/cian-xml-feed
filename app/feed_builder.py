@@ -20,6 +20,22 @@ AMENITY_MAP = {
     "Мебель в комнатах": "RoomFurniture",
 }
 
+MATERIAL_MAP = {
+    "монолит": "monolith",
+    "монолитн": "monolith",
+    "кирп": "brick",
+    "панел": "panel",
+    "блоч": "block",
+    "дерев": "wood",
+}
+
+PARKING_MAP = {
+    "подзем": "underground",
+    "назем": "ground",
+    "многоур": "multilevel",
+    "гараж": "garage",
+}
+
 
 def escape_xml(text: str | None) -> str:
     """Escape XML-sensitive characters."""
@@ -206,6 +222,78 @@ def _parse_room_type(details: str | None, apt: dict[str, Any]) -> str | None:
     return None
 
 
+def _parse_lease_term(text: str | None) -> str | None:
+    if not text:
+        return None
+    lower = text.lower()
+    if "от года" in lower or "долгоср" in lower:
+        return "longTerm"
+    if "несколько" in lower or "месяц" in lower or "помесяч" in lower:
+        return "fewMonths"
+    return None
+
+
+def _parse_material(details: str | None, apt: dict[str, Any]) -> str | None:
+    value = apt.get("building_material") or apt.get("material_type")
+    if value:
+        return str(value)
+    if not details:
+        return None
+    text = details.lower()
+    for needle, code in MATERIAL_MAP.items():
+        if needle in text:
+            return code
+    return None
+
+
+def _parse_ceiling(details: str | None, apt: dict[str, Any]) -> str | None:
+    height = apt.get("ceiling_height")
+    if height:
+        return str(height)
+    if not details:
+        return None
+    match = re.search(r"Потолки:\s*([\d\,\.]+)", details)
+    if match:
+        value = match.group(1).replace(",", ".")
+        return value
+    return None
+
+
+def _parse_lift_counts(details: str | None, apt: dict[str, Any]) -> tuple[str | None, str | None]:
+    passenger = apt.get("passenger_lifts_count")
+    cargo = apt.get("cargo_lifts_count")
+    if passenger is not None or cargo is not None:
+        return (
+            str(passenger) if passenger is not None else None,
+            str(cargo) if cargo is not None else None,
+        )
+    if not details:
+        return None, None
+    match = re.search(
+        r"Лифты:\s*(?:([\d]+)\s*пассажир[а-я]*[,\s]*)?(?:([\d]+)\s*грузов[а-я]*)?",
+        details,
+        re.IGNORECASE,
+    )
+    if match:
+        passenger = match.group(1)
+        cargo = match.group(2)
+        return passenger, cargo
+    return None, None
+
+
+def _parse_parking(details: str | None, apt: dict[str, Any]) -> str | None:
+    value = apt.get("parking_type")
+    if value:
+        return str(value)
+    if not details:
+        return None
+    text = details.lower()
+    for needle, code in PARKING_MAP.items():
+        if needle in text:
+            return code
+    return None
+
+
 def build_feed(apartments: list[dict[str, Any]]) -> str:
     """Generate XML feed document."""
 
@@ -219,10 +307,22 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
             apt.get("external_id") or f"apt_{idx}"
         )
 
-        auction_bet = apt.get("auction_bet")
+        auction_bet = (
+            apt.get("auction_bet")
+            if apt.get("auction_bet") is not None
+            else apt.get("promotion_bet")
+        )
         if auction_bet:
             auction = ET.SubElement(obj, "Auction")
             ET.SubElement(auction, "Bet").text = str(auction_bet)
+        elif apt.get("auction_participates") or apt.get("promotion_bet") is not None:
+            # Пустой тег при участии без ставки
+            auction = ET.SubElement(obj, "Auction")
+            ET.SubElement(auction, "Bet").text = ""
+
+        title = apt.get("title")
+        if title:
+            ET.SubElement(obj, "Title").text = escape_xml(title)
 
         ET.SubElement(obj, "Status").text = apt.get("status") or "published"
         ET.SubElement(obj, "Category").text = "flatRent"
@@ -233,8 +333,8 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
 
         ET.SubElement(obj, "Type").text = "apartment"
 
-        address = ET.SubElement(obj, "Address")
-        ET.SubElement(address, "AddressLine").text = escape_xml(apt.get("address"))
+        if apt.get("address"):
+            ET.SubElement(obj, "Address").text = escape_xml(apt["address"])
 
         ET.SubElement(obj, "Description").text = escape_xml(apt.get("description"))
 
@@ -260,8 +360,8 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
         kitchen_space = _extract_float(r"Кухня:\s*([\d,\.]+)", details)
 
         ET.SubElement(obj, "TotalArea").text = total_area
-        ET.SubElement(obj, "LivingSpace").text = living_space
-        ET.SubElement(obj, "KitchenSpace").text = kitchen_space
+        ET.SubElement(obj, "LivingArea").text = living_space
+        ET.SubElement(obj, "KitchenArea").text = kitchen_space
 
         separate_wc, combined_wc = _parse_bathroom_counts(details)
         separate_wc = separate_wc or apt.get("separate_wc_count")
@@ -292,16 +392,37 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
             price_match.group(1) if price_match else None
         )
         ET.SubElement(bargain, "Currency").text = "RUB"
-        ET.SubElement(bargain, "PaymentPeriod").text = "month"
         ET.SubElement(bargain, "Deposit").text = parse_price(
             deposit_match.group(1) if deposit_match else None
         )
-        ET.SubElement(bargain, "Prepay").text = (
-            prepay_match.group(1) if prepay_match else "1"
+
+        prepay_value = apt.get("prepay_months") or (prepay_match.group(1) if prepay_match else None)
+        ET.SubElement(bargain, "PrepayMonths").text = str(prepay_value or "1")
+
+        lease_term = apt.get("lease_term_type") or _parse_lease_term(rental)
+        if lease_term:
+            ET.SubElement(bargain, "LeaseTermType").text = lease_term
+
+        client_fee_val = apt.get("client_fee")
+        ET.SubElement(bargain, "ClientFee").text = (
+            "" if client_fee_val is None else str(client_fee_val)
         )
-        ET.SubElement(bargain, "ClientFee").text = "false"
-        ET.SubElement(bargain, "LandlordFee").text = "true"
-        ET.SubElement(bargain, "BargainStatus").text = "approved"
+        agent_fee_val = apt.get("agent_fee")
+        ET.SubElement(bargain, "AgentFee").text = (
+            "" if agent_fee_val is None else str(agent_fee_val)
+        )
+
+        utilities = ET.SubElement(bargain, "UtilitiesTerms")
+        included = _get_bool(apt.get("utilities_included"))
+        if included is None and rental:
+            lower = rental.lower()
+            if "включ" in lower:
+                included = True
+            if "по сч" in lower or "по счет" in lower:
+                included = False
+        included_text = "true" if included else "false"
+        ET.SubElement(utilities, "IncludedInPrice").text = included_text
+        ET.SubElement(utilities, "FlowMetersNotIncludedInPrice").text = "true"
 
         photos = ET.SubElement(obj, "Photos")
         photo_urls: list[str] = []
@@ -324,7 +445,7 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
                     photo_urls.append(url_str)
 
         def add_photo(url: str, is_main: bool) -> None:
-            photo_el = ET.SubElement(photos, "Photo")
+            photo_el = ET.SubElement(photos, "PhotoSchema")
             ET.SubElement(photo_el, "FullUrl").text = escape_xml(url)
             ET.SubElement(photo_el, "IsDefault").text = "true" if is_main else "false"
 
@@ -346,6 +467,19 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
                 or (apt.get("property_type") == "apartments")
             ),
         )
+
+        if obj.findtext("IsApartments") is None:
+            text_sources = " ".join(
+                str(part)
+                for part in (
+                    apt.get("category"),
+                    apt.get("apartment_details"),
+                    apt.get("description"),
+                )
+                if part
+            ).lower()
+            if "апартамент" in text_sources:
+                _set_bool(obj, "IsApartments", True)
 
         agent_info = apt.get("agent") or {}
         contact_name = (
@@ -377,40 +511,68 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
             if contact_email:
                 ET.SubElement(contact, "Email").text = escape_xml(contact_email)
 
-        if apt.get("subagent_first_name") or apt.get("subagent_last_name"):
+        sub_first = apt.get("subagent_first_name")
+        sub_last = apt.get("subagent_last_name")
+        sub_email = apt.get("subagent_email")
+        sub_phone = apt.get("subagent_phone")
+        sub_avatar = apt.get("subagent_avatar_url")
+
+        if not sub_first and agent_info.get("name"):
+            name_parts = agent_info["name"].strip().split(maxsplit=1)
+            if name_parts:
+                sub_first = sub_first or name_parts[0]
+            if len(name_parts) > 1:
+                sub_last = sub_last or name_parts[1]
+        if not sub_email:
+            sub_email = agent_info.get("email")
+        if not sub_phone:
+            sub_phone = agent_info.get("phone")
+
+        if sub_first or sub_last or sub_email or sub_phone or sub_avatar:
             sub_agent = ET.SubElement(obj, "SubAgent")
-            if apt.get("subagent_email"):
-                ET.SubElement(sub_agent, "Email").text = escape_xml(
-                    apt["subagent_email"]
-                )
-            if apt.get("subagent_phone"):
-                ET.SubElement(sub_agent, "Phone").text = escape_xml(
-                    str(apt["subagent_phone"])
-                )
-            if apt.get("subagent_first_name"):
-                ET.SubElement(sub_agent, "FirstName").text = escape_xml(
-                    apt["subagent_first_name"]
-                )
-            if apt.get("subagent_last_name"):
-                ET.SubElement(sub_agent, "LastName").text = escape_xml(
-                    apt["subagent_last_name"]
-                )
-            if apt.get("subagent_avatar_url"):
-                ET.SubElement(sub_agent, "AvatarUrl").text = escape_xml(
-                    apt["subagent_avatar_url"]
-                )
+            if sub_email:
+                ET.SubElement(sub_agent, "Email").text = escape_xml(str(sub_email))
+            if sub_phone:
+                ET.SubElement(sub_agent, "Phone").text = escape_xml(str(sub_phone))
+            if sub_first:
+                ET.SubElement(sub_agent, "FirstName").text = escape_xml(str(sub_first))
+            if sub_last:
+                ET.SubElement(sub_agent, "LastName").text = escape_xml(str(sub_last))
+            if sub_avatar:
+                ET.SubElement(sub_agent, "AvatarUrl").text = escape_xml(str(sub_avatar))
 
         building = ET.SubElement(obj, "Building")
         if apt.get("complex_name"):
             ET.SubElement(building, "Name").text = escape_xml(apt["complex_name"])
+
         total_floors = apt.get("total_floors")
         if total_floors:
-            ET.SubElement(building, "FloorsNumber").text = str(total_floors)
+            ET.SubElement(building, "FloorsCount").text = str(total_floors)
+
         house_details = apt.get("house_details")
         if house_details:
             year_match = re.search(r"Год:\s*(\d{4})", house_details)
             if year_match:
                 ET.SubElement(building, "BuildYear").text = year_match.group(1)
+
+        material = _parse_material(house_details, apt)
+        if material:
+            ET.SubElement(building, "MaterialType").text = material
+
+        ceiling = _parse_ceiling(house_details, apt)
+        if ceiling:
+            ET.SubElement(building, "CeilingHeight").text = ceiling
+
+        passenger_lifts, cargo_lifts = _parse_lift_counts(house_details, apt)
+        if passenger_lifts:
+            ET.SubElement(building, "PassengerLiftsCount").text = passenger_lifts
+        if cargo_lifts:
+            ET.SubElement(building, "CargoLiftsCount").text = cargo_lifts
+
+        parking_type = _parse_parking(house_details, apt)
+        if parking_type:
+            parking_el = ET.SubElement(building, "Parking")
+            ET.SubElement(parking_el, "Type").text = parking_type
 
         jk_id = apt.get("jk_id") or apt.get("complex_id")
         if jk_id or apt.get("complex_name"):
