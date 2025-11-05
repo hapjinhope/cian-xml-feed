@@ -482,40 +482,12 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
                 _set_bool(obj, "IsApartments", True)
 
         agent_info = apt.get("agent") or {}
-        contact_name = (
-            agent_info.get("name")
-            or apt.get("agent_name")
-            or apt.get("agent_full_name")
-        )
-        contact_email = agent_info.get("email") or apt.get("agent_email")
-        phones = _collect_phones(
-            agent_info.get("phones"),
-            agent_info.get("phone"),
-            apt.get("agent_phone"),
-        )
 
         sub_first = apt.get("subagent_first_name")
         sub_last = apt.get("subagent_last_name")
         sub_email = apt.get("subagent_email")
         sub_phone = apt.get("subagent_phone")
         sub_avatar = apt.get("subagent_avatar_url")
-
-        if phones and (sub_first or sub_last or sub_email or sub_phone or sub_avatar):
-            contacts = ET.SubElement(obj, "Contacts")
-            contact = ET.SubElement(contacts, "Contact")
-            if contact_name:
-                ET.SubElement(contact, "Name").text = escape_xml(contact_name)
-            phones_el = ET.SubElement(contact, "Phones")
-            for phone in phones:
-                phone_parts = _split_phone(phone)
-                if not phone_parts:
-                    continue
-                country_code, local_number = phone_parts
-                phone_el = ET.SubElement(phones_el, "PhoneSchema")
-                ET.SubElement(phone_el, "CountryCode").text = country_code
-                ET.SubElement(phone_el, "Number").text = local_number
-            if contact_email:
-                ET.SubElement(contact, "Email").text = escape_xml(contact_email)
 
         if not sub_first and agent_info.get("name"):
             name_parts = agent_info["name"].strip().split(maxsplit=1)
