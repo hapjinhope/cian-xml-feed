@@ -6,7 +6,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY main.py .
+COPY start.py .
 
 EXPOSE 8080
 
-CMD ["python", "main.py"]
+CMD ["python", "start.py"]
