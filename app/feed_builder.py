@@ -517,6 +517,22 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
         if not sub_phone:
             sub_phone = agent_info.get("phone") or apt.get("agent_phone")
 
+        phones_list = _collect_phones(
+            sub_phone,
+            agent_info.get("phone"),
+            apt.get("agent_phone"),
+        )
+        if phones_list:
+            phones_el = ET.SubElement(obj, "Phones")
+            for phone in phones_list:
+                parts = _split_phone(phone)
+                if not parts:
+                    continue
+                country_code, local_number = parts
+                phone_el = ET.SubElement(phones_el, "PhoneSchema")
+                ET.SubElement(phone_el, "CountryCode").text = country_code
+                ET.SubElement(phone_el, "Number").text = local_number
+
         if sub_first or sub_last or sub_email or sub_phone or sub_avatar:
             sub_agent = ET.SubElement(obj, "SubAgent")
             if sub_email:
