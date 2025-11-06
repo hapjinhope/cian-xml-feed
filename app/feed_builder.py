@@ -429,15 +429,7 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
         ET.SubElement(bargain, "AgentFee").text = commission_value
 
         utilities = ET.SubElement(bargain, "UtilitiesTerms")
-        included = _get_bool(apt.get("utilities_included"))
-        if included is None and rental:
-            lower = rental.lower()
-            if "включ" in lower:
-                included = True
-            if "по сч" in lower or "по счет" in lower:
-                included = False
-        included_text = "true" if included else "false"
-        ET.SubElement(utilities, "IncludedInPrice").text = included_text
+        ET.SubElement(utilities, "IncludedInPrice").text = "true"
         ET.SubElement(utilities, "FlowMetersNotIncludedInPrice").text = "true"
 
         photos = ET.SubElement(obj, "Photos")
@@ -521,9 +513,45 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
             if len(name_parts) == 1 and not sub_last and sub_first:
                 sub_last = sub_first
         if not sub_email:
-            sub_email = agent_info.get("email")
+            sub_email = agent_info.get("email") or apt.get("agent_email")
         if not sub_phone:
-            sub_phone = agent_info.get("phone")
+            sub_phone = agent_info.get("phone") or apt.get("agent_phone")
+
+        contact_phones = _collect_phones(
+            sub_phone,
+            agent_info.get("phone"),
+            apt.get("agent_phone"),
+        )
+
+        contact_email = (
+            sub_email or agent_info.get("email") or apt.get("agent_email")
+        )
+        contact_name_val = apt.get("contact_name")
+        if not contact_name_val:
+            names = [name for name in (sub_first, sub_last) if name]
+            if names:
+                contact_name_val = " ".join(names)
+            elif agent_info.get("name"):
+                contact_name_val = agent_info["name"]
+            elif apt.get("agent_name"):
+                contact_name_val = apt["agent_name"]
+
+        if contact_phones:
+            contacts = ET.SubElement(obj, "Contacts")
+            contact = ET.SubElement(contacts, "Contact")
+            if contact_name_val:
+                ET.SubElement(contact, "Name").text = escape_xml(contact_name_val)
+            phones_el = ET.SubElement(contact, "Phones")
+            for phone in contact_phones:
+                parts = _split_phone(phone)
+                if not parts:
+                    continue
+                country_code, local_number = parts
+                phone_el = ET.SubElement(phones_el, "PhoneSchema")
+                ET.SubElement(phone_el, "CountryCode").text = country_code
+                ET.SubElement(phone_el, "Number").text = local_number
+            if contact_email:
+                ET.SubElement(contact, "Email").text = escape_xml(contact_email)
 
         if sub_first or sub_last or sub_email or sub_phone or sub_avatar:
             sub_agent = ET.SubElement(obj, "SubAgent")
