@@ -74,7 +74,7 @@ class SupabaseClient:
         id_list = ",".join(str(agent_id) for agent_id in ids)
         params = {
             "id": f"in.({id_list})",
-            "select": "id,name,first_name,last_name,phone,email",
+            "select": "id,name,first_name,last_name,surname,phone,email",
         }
         try:
             response = self._get("agents", params=params)
@@ -82,7 +82,7 @@ class SupabaseClient:
             if exc.response.status_code == 400:
                 fallback = {
                     "id": f"in.({id_list})",
-                    "select": "id,name,phone,email",
+                    "select": "id,name,surname,phone,email",
                 }
                 response = self._get("agents", params=fallback)
             else:

@@ -499,8 +499,15 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
 
         agent_info = apt.get("agent") or {}
 
-        sub_first = apt.get("subagent_first_name") or agent_info.get("first_name")
-        sub_last = apt.get("subagent_last_name") or agent_info.get("last_name")
+        sub_first = (
+            apt.get("subagent_first_name")
+            or agent_info.get("first_name")
+        )
+        sub_last = (
+            apt.get("subagent_last_name")
+            or agent_info.get("last_name")
+            or agent_info.get("surname")
+        )
         sub_email = apt.get("subagent_email")
         sub_phone = apt.get("subagent_phone")
         sub_avatar = apt.get("subagent_avatar_url")
