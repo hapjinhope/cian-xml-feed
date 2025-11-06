@@ -233,6 +233,13 @@ def _parse_lease_term(text: str | None) -> str | None:
     return None
 
 
+def _parse_commission(value: Any) -> str | None:
+    if value is None:
+        return None
+    match = re.search(r"\d+", str(value))
+    return match.group(0) if match else None
+
+
 def _parse_material(details: str | None, apt: dict[str, Any]) -> str | None:
     value = apt.get("building_material") or apt.get("material_type")
     if value:
@@ -403,14 +410,11 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
         if lease_term:
             ET.SubElement(bargain, "LeaseTermType").text = lease_term
 
-        client_fee_val = apt.get("client_fee")
-        ET.SubElement(bargain, "ClientFee").text = (
-            "" if client_fee_val is None else str(client_fee_val)
-        )
-        agent_fee_val = apt.get("agent_fee")
-        ET.SubElement(bargain, "AgentFee").text = (
-            "" if agent_fee_val is None else str(agent_fee_val)
-        )
+        commission_value = _parse_commission(
+            apt.get("commission") or apt.get("client_fee") or apt.get("agent_fee")
+        ) or "100"
+        ET.SubElement(bargain, "ClientFee").text = commission_value
+        ET.SubElement(bargain, "AgentFee").text = commission_value
 
         utilities = ET.SubElement(bargain, "UtilitiesTerms")
         included = _get_bool(apt.get("utilities_included"))

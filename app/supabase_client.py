@@ -72,13 +72,21 @@ class SupabaseClient:
             return {}
 
         id_list = ",".join(str(agent_id) for agent_id in ids)
-        response = self._get(
-            "agents",
-            params={
-                "id": f"in.({id_list})",
-                "select": "id,name,first_name,last_name,phone,email",
-            },
-        )
+        params = {
+            "id": f"in.({id_list})",
+            "select": "id,name,first_name,last_name,phone,email",
+        }
+        try:
+            response = self._get("agents", params=params)
+        except httpx.HTTPStatusError as exc:  # pragma: no cover - depend on schema
+            if exc.response.status_code == 400:
+                fallback = {
+                    "id": f"in.({id_list})",
+                    "select": "id,name,phone,email",
+                }
+                response = self._get("agents", params=fallback)
+            else:
+                raise
         data = response.json()
         if not isinstance(data, list):
             return {}
