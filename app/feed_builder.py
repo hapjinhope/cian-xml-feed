@@ -240,6 +240,20 @@ def _parse_commission(value: Any) -> str | None:
     return match.group(0) if match else None
 
 
+def _extract_commission(apt: dict[str, Any]) -> str:
+    for key in (
+        "commission",
+        "commision",
+        "scommission",
+        "client_fee",
+        "agent_fee",
+    ):
+        digits = _parse_commission(apt.get(key))
+        if digits:
+            return digits
+    return "100"
+
+
 def _parse_material(details: str | None, apt: dict[str, Any]) -> str | None:
     value = apt.get("building_material") or apt.get("material_type")
     if value:
@@ -410,9 +424,7 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
         if lease_term:
             ET.SubElement(bargain, "LeaseTermType").text = lease_term
 
-        commission_value = _parse_commission(
-            apt.get("commission") or apt.get("client_fee") or apt.get("agent_fee")
-        ) or "100"
+        commission_value = _extract_commission(apt)
         ET.SubElement(bargain, "ClientFee").text = commission_value
         ET.SubElement(bargain, "AgentFee").text = commission_value
 
@@ -493,12 +505,14 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
         sub_phone = apt.get("subagent_phone")
         sub_avatar = apt.get("subagent_avatar_url")
 
-        if (not sub_first or not sub_last) and agent_info.get("name"):
-            name_parts = agent_info["name"].strip().split(maxsplit=1)
-            if name_parts:
-                sub_first = sub_first or name_parts[0]
-            if len(name_parts) > 1:
-                sub_last = sub_last or name_parts[1]
+        if agent_info.get("name"):
+            name_parts = agent_info["name"].strip().split()
+            if name_parts and not sub_first:
+                sub_first = name_parts[0]
+            if len(name_parts) > 1 and not sub_last:
+                sub_last = name_parts[-1]
+            if len(name_parts) == 1 and not sub_last and sub_first:
+                sub_last = sub_first
         if not sub_email:
             sub_email = agent_info.get("email")
         if not sub_phone:
