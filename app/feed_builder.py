@@ -44,6 +44,16 @@ PARKING_MAP = {
     "гараж": "garage",
 }
 
+REPAIR_MAP = {
+    "дизайн": "design",
+    "дизайнер": "design",
+    "евро": "euro",
+    "космет": "cosmetic",
+    "капит": "cosmetic",
+    "без отдел": "without",
+    "чернов": "without",
+}
+
 MATERIAL_MAP = {
     "монолит": "monolith",
     "монолитн": "monolith",
@@ -490,8 +500,17 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
         lease_term = apt.get("termtype") or apt.get("lease_term_type") or _parse_lease_term(
             rental
         )
+        lease_term_map = {
+            "от года": "longTerm",
+            "от года и более": "longTerm",
+            "несколько месяцев": "fewMonths",
+            "помесячно": "fewMonths",
+        }
         if lease_term:
-            ET.SubElement(bargain, "LeaseTermType").text = lease_term
+            normalized_term = lease_term_map.get(
+                str(lease_term).strip().lower(), lease_term
+            )
+            ET.SubElement(bargain, "LeaseTermType").text = normalized_term
 
         commission_value = _extract_commission(apt)
         ET.SubElement(bargain, "ClientFee").text = commission_value
@@ -499,14 +518,15 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
 
         utilities = ET.SubElement(bargain, "UtilitiesTerms")
         util_text = (apt.get("utilites") or "").lower()
-        if "не" in util_text and "включ" in util_text:
-            included_value = "false"
-        else:
-            included_value = "true"
+        included_value = "true"
+        meters_value = "false"
+        if util_text:
+            if "не" in util_text and "включ" in util_text:
+                included_value = "false"
+            if "без сч" in util_text or "без счет" in util_text:
+                meters_value = "true"
         ET.SubElement(utilities, "IncludedInPrice").text = included_value
-        ET.SubElement(utilities, "FlowMetersNotIncludedInPrice").text = (
-            "false" if "без сч" not in util_text else "true"
-        )
+        ET.SubElement(utilities, "FlowMetersNotIncludedInPrice").text = meters_value
 
         photos = ET.SubElement(obj, "Photos")
         photo_urls: list[str] = []
@@ -701,7 +721,8 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
         rent_lower = rental.lower()
 
         def has_keyword(keyword: str) -> bool:
-            return keyword.lower() in amenities_lower
+            keyword_lower = keyword.lower()
+            return any(keyword_lower in item for item in amenities_lower)
 
         bool_specs = [
             ("HasInternet", ["internet", "has_internet"], "интернет"),
