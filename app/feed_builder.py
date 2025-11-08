@@ -20,6 +20,30 @@ AMENITY_MAP = {
     "Мебель в комнатах": "RoomFurniture",
 }
 
+ROOM_TYPE_MAP = {
+    "смежно-изолированная": "both",
+    "смежная": "adjacent",
+    "изолированная": "separated",
+    "свободная": "free",
+    "свободная планировка": "free",
+    "студия": "studio",
+}
+
+WINDOW_VIEW_MAP = {
+    "на улицу и двор": "streetAndYard",
+    "улиц": "street",
+    "улицу": "street",
+    "двор": "yard",
+}
+
+PARKING_MAP = {
+    "подзем": "underground",
+    "назем": "ground",
+    "крыт": "multilevel",
+    "многоур": "multilevel",
+    "гараж": "garage",
+}
+
 MATERIAL_MAP = {
     "монолит": "monolith",
     "монолитн": "monolith",
@@ -27,13 +51,6 @@ MATERIAL_MAP = {
     "панел": "panel",
     "блоч": "block",
     "дерев": "wood",
-}
-
-PARKING_MAP = {
-    "подзем": "underground",
-    "назем": "ground",
-    "многоур": "multilevel",
-    "гараж": "garage",
 }
 
 def _stringify_number(value: Any) -> str | None:
@@ -187,6 +204,10 @@ def _parse_count(details: str | None, label: str) -> str | None:
 def _parse_windows(details: str | None, apt: dict[str, Any]) -> str | None:
     direct = apt.get("windowtype") or apt.get("windows_view_type")
     if direct:
+        lower = str(direct).strip().lower()
+        for needle, mapped in WINDOW_VIEW_MAP.items():
+            if needle in lower:
+                return mapped
         return str(direct)
     if not details:
         return None
@@ -208,7 +229,8 @@ def _parse_windows(details: str | None, apt: dict[str, Any]) -> str | None:
 def _parse_room_type(details: str | None, apt: dict[str, Any]) -> str | None:
     value = apt.get("room_type") or apt.get("layout")
     if value:
-        return str(value)
+        value_lower = str(value).strip().lower()
+        return ROOM_TYPE_MAP.get(value_lower, str(value))
     if not details:
         return None
     match = re.search(r"Планировка:\s*([^.]+)", details)
@@ -261,6 +283,10 @@ def _extract_commission(apt: dict[str, Any]) -> str:
 def _parse_material(details: str | None, apt: dict[str, Any]) -> str | None:
     value = apt.get("building_material") or apt.get("material_type")
     if value:
+        lower = str(value).strip().lower()
+        for needle, mapped in MATERIAL_MAP.items():
+            if needle in lower:
+                return mapped
         return str(value)
     if not details:
         return None
@@ -307,8 +333,12 @@ def _parse_lift_counts(details: str | None, apt: dict[str, Any]) -> tuple[str | 
 
 
 def _parse_parking(details: str | None, apt: dict[str, Any]) -> str | None:
-    value = apt.get("parking_type")
+    value = apt.get("parking_type") or apt.get("parking")
     if value:
+        lower = str(value).strip().lower()
+        for needle, code in PARKING_MAP.items():
+            if needle in lower:
+                return code
         return str(value)
     if not details:
         return None
@@ -625,7 +655,7 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
         if cargo_lifts:
             ET.SubElement(building, "CargoLiftsCount").text = cargo_lifts
 
-        parking_type = apt.get("parking") or _parse_parking(house_details, apt)
+        parking_type = _parse_parking(house_details, apt)
         if parking_type:
             parking_el = ET.SubElement(building, "Parking")
             ET.SubElement(parking_el, "Type").text = parking_type
