@@ -324,9 +324,8 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
     for idx, apt in enumerate(apartments, start=1):
         obj = ET.SubElement(feed, "Object")
 
-        ET.SubElement(obj, "ExternalId").text = str(
-            apt.get("external_id") or f"apt_{idx}"
-        )
+        external_id = str(apt.get("external_id") or f"apt_{idx}")
+        ET.SubElement(obj, "ExternalId").text = external_id
 
         auction_bet = (
             apt.get("auction_bet")
@@ -357,7 +356,9 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
         if apt.get("address"):
             ET.SubElement(obj, "Address").text = escape_xml(apt["address"])
 
-        ET.SubElement(obj, "Description").text = escape_xml(apt.get("description"))
+        description_raw = apt.get("description") or ""
+        description_text = f"ID {external_id}. {description_raw}".strip()
+        ET.SubElement(obj, "Description").text = escape_xml(description_text)
 
         rooms_value = int(apt.get("rooms") or 0)
         if rooms_value <= 0:
