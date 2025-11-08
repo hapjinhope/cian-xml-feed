@@ -36,6 +36,10 @@ PARKING_MAP = {
     "гараж": "garage",
 }
 
+def _stringify_number(value: Any) -> str | None:
+    if value is None:
+        return None
+    return str(value)
 
 def escape_xml(text: str | None) -> str:
     """Escape XML-sensitive characters."""
@@ -181,7 +185,7 @@ def _parse_count(details: str | None, label: str) -> str | None:
 
 
 def _parse_windows(details: str | None, apt: dict[str, Any]) -> str | None:
-    direct = apt.get("windows_view_type")
+    direct = apt.get("windowtype") or apt.get("windows_view_type")
     if direct:
         return str(direct)
     if not details:
@@ -202,7 +206,7 @@ def _parse_windows(details: str | None, apt: dict[str, Any]) -> str | None:
 
 
 def _parse_room_type(details: str | None, apt: dict[str, Any]) -> str | None:
-    value = apt.get("room_type")
+    value = apt.get("room_type") or apt.get("layout")
     if value:
         return str(value)
     if not details:
@@ -381,20 +385,46 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
         living_space = _extract_float(r"Жилая:\s*([\d,\.]+)", details)
         kitchen_space = _extract_float(r"Кухня:\s*([\d,\.]+)", details)
 
-        ET.SubElement(obj, "TotalArea").text = total_area
-        ET.SubElement(obj, "LivingArea").text = living_space
-        ET.SubElement(obj, "KitchenArea").text = kitchen_space
+        total_area_val = _stringify_number(apt.get("total_area"))
+        living_area_val = _stringify_number(apt.get("living_area"))
+        kitchen_area_val = _stringify_number(apt.get("kitchen_area"))
+
+        ET.SubElement(obj, "TotalArea").text = (
+            total_area_val or _extract_float(r"Площадь:\s*([\d,\.]+)", details)
+        )
+        ET.SubElement(obj, "LivingArea").text = (
+            living_area_val or _extract_float(r"Жилая:\s*([\d,\.]+)", details)
+        )
+        ET.SubElement(obj, "KitchenArea").text = (
+            kitchen_area_val or _extract_float(r"Кухня:\s*([\d,\.]+)", details)
+        )
 
         separate_wc, combined_wc = _parse_bathroom_counts(details)
-        separate_wc = separate_wc or apt.get("separate_wc_count")
-        combined_wc = combined_wc or apt.get("combined_wc_count")
+        separate_wc = (
+            _stringify_number(apt.get("separate_bathroom"))
+            or separate_wc
+            or apt.get("separate_wc_count")
+        )
+        combined_wc = (
+            _stringify_number(apt.get("combined_bathroom"))
+            or combined_wc
+            or apt.get("combined_wc_count")
+        )
         if separate_wc:
             ET.SubElement(obj, "SeparateWcsCount").text = str(separate_wc)
         if combined_wc:
             ET.SubElement(obj, "CombinedWcsCount").text = str(combined_wc)
 
-        loggias_count = apt.get("loggias_count") or _parse_count(details, "Лоджий")
-        balconies_count = apt.get("balconies_count") or _parse_count(details, "Балконов")
+        loggias_count = (
+            _stringify_number(apt.get("loggias"))
+            or apt.get("loggias_count")
+            or _parse_count(details, "Лоджий")
+        )
+        balconies_count = (
+            _stringify_number(apt.get("balconies"))
+            or apt.get("balconies_count")
+            or _parse_count(details, "Балконов")
+        )
         if loggias_count:
             ET.SubElement(obj, "LoggiasCount").text = str(loggias_count)
         if balconies_count:
@@ -410,18 +440,26 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
         prepay_match = re.search(r"Предоплата:\s*(\d+)", rental)
 
         bargain = ET.SubElement(obj, "BargainTerms")
-        ET.SubElement(bargain, "Price").text = parse_price(
+        price_value = _stringify_number(apt.get("price"))
+        ET.SubElement(bargain, "Price").text = price_value or parse_price(
             price_match.group(1) if price_match else None
         )
         ET.SubElement(bargain, "Currency").text = "RUB"
-        ET.SubElement(bargain, "Deposit").text = parse_price(
+        deposit_value = _stringify_number(apt.get("deposit"))
+        ET.SubElement(bargain, "Deposit").text = deposit_value or parse_price(
             deposit_match.group(1) if deposit_match else None
         )
 
-        prepay_value = apt.get("prepay_months") or (prepay_match.group(1) if prepay_match else None)
+        prepay_value = (
+            _stringify_number(apt.get("prepayment"))
+            or _stringify_number(apt.get("prepay_months"))
+            or (prepay_match.group(1) if prepay_match else None)
+        )
         ET.SubElement(bargain, "PrepayMonths").text = str(prepay_value or "1")
 
-        lease_term = apt.get("lease_term_type") or _parse_lease_term(rental)
+        lease_term = apt.get("termtype") or apt.get("lease_term_type") or _parse_lease_term(
+            rental
+        )
         if lease_term:
             ET.SubElement(bargain, "LeaseTermType").text = lease_term
 
@@ -430,8 +468,15 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
         ET.SubElement(bargain, "AgentFee").text = commission_value
 
         utilities = ET.SubElement(bargain, "UtilitiesTerms")
-        ET.SubElement(utilities, "IncludedInPrice").text = "true"
-        ET.SubElement(utilities, "FlowMetersNotIncludedInPrice").text = "true"
+        util_text = (apt.get("utilites") or "").lower()
+        if "не" in util_text and "включ" in util_text:
+            included_value = "false"
+        else:
+            included_value = "true"
+        ET.SubElement(utilities, "IncludedInPrice").text = included_value
+        ET.SubElement(utilities, "FlowMetersNotIncludedInPrice").text = (
+            "false" if "без сч" not in util_text else "true"
+        )
 
         photos = ET.SubElement(obj, "Photos")
         photo_urls: list[str] = []
@@ -561,21 +606,26 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
             if year_match:
                 ET.SubElement(building, "BuildYear").text = year_match.group(1)
 
-        material = _parse_material(house_details, apt)
+        material = apt.get("material_type") or _parse_material(house_details, apt)
         if material:
             ET.SubElement(building, "MaterialType").text = material
 
-        ceiling = _parse_ceiling(house_details, apt)
+        ceiling = (
+            _stringify_number(apt.get("ceiling_height"))
+            or _parse_ceiling(house_details, apt)
+        )
         if ceiling:
             ET.SubElement(building, "CeilingHeight").text = ceiling
 
-        passenger_lifts, cargo_lifts = _parse_lift_counts(house_details, apt)
+        parsed_passenger, parsed_cargo = _parse_lift_counts(house_details, apt)
+        passenger_lifts = _stringify_number(apt.get("passenger_elevator")) or parsed_passenger
+        cargo_lifts = _stringify_number(apt.get("freight_elevator")) or parsed_cargo
         if passenger_lifts:
             ET.SubElement(building, "PassengerLiftsCount").text = passenger_lifts
         if cargo_lifts:
             ET.SubElement(building, "CargoLiftsCount").text = cargo_lifts
 
-        parking_type = _parse_parking(house_details, apt)
+        parking_type = apt.get("parking") or _parse_parking(house_details, apt)
         if parking_type:
             parking_el = ET.SubElement(building, "Parking")
             ET.SubElement(parking_el, "Type").text = parking_type
@@ -624,24 +674,28 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
             return keyword.lower() in amenities_lower
 
         bool_specs = [
-            ("HasInternet", "has_internet", "интернет"),
-            ("HasFurniture", "has_furniture", None),
-            ("HasPhone", "has_phone", "телефон"),
-            ("HasKitchenFurniture", "has_kitchen_furniture", "мебель на кухне"),
-            ("HasTv", "has_tv", "телевизор"),
-            ("HasWasher", "has_washer", "стиральная машина"),
-            ("HasConditioner", "has_conditioner", "кондиционер"),
-            ("HasRamp", "has_ramp", None),
-            ("HasBathtub", "has_bathtub", "ванна"),
-            ("HasShower", "has_shower", "душевая кабина"),
-            ("HasDishwasher", "has_dishwasher", "посудомоечная машина"),
-            ("HasFridge", "has_fridge", "холодильник"),
-            ("PetsAllowed", "pets_allowed", None),
-            ("ChildrenAllowed", "children_allowed", None),
+            ("HasInternet", ["internet", "has_internet"], "интернет"),
+            ("HasFurniture", ["furniture", "has_furniture"], None),
+            ("HasPhone", ["has_phone"], "телефон"),
+            ("HasKitchenFurniture", ["kitchenfurniture", "has_kitchen_furniture"], "мебель на кухне"),
+            ("HasTv", ["tv", "has_tv"], "телевизор"),
+            ("HasWasher", ["washer", "has_washer"], "стиральная машина"),
+            ("HasConditioner", ["conditioner", "has_conditioner"], "кондиционер"),
+            ("HasRamp", ["has_ramp"], None),
+            ("HasBathtub", ["bathtub", "has_bathtub"], "ванна"),
+            ("HasShower", ["shower", "has_shower"], "душевая кабина"),
+            ("HasDishwasher", ["dishwasher", "has_dishwasher"], "посудомоечная машина"),
+            ("HasFridge", ["fridge", "has_fridge"], "холодильник"),
+            ("PetsAllowed", ["pets", "pets_allowed"], None),
+            ("ChildrenAllowed", ["children", "children_allowed"], None),
         ]
 
-        for tag, field, keyword in bool_specs:
-            value = _get_bool(apt.get(field))
+        for tag, fields, keyword in bool_specs:
+            value = None
+            for field in fields:
+                value = _get_bool(apt.get(field))
+                if value is not None:
+                    break
             if value is None and keyword:
                 value = True if has_keyword(keyword) else None
             if tag == "HasFurniture" and (value is None or value is False):
