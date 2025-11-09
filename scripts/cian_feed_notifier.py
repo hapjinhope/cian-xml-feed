@@ -20,6 +20,24 @@ TG_CHAT_ID = os.getenv("TG_CHAT_ID")
 TG_THREAD_ID = os.getenv("TG_THREAD_ID")
 TG_ERROR_USER_ID = os.getenv("TG_ERROR_USER_ID")
 
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY")
+SUPABASE_TABLE = os.getenv("SUPABASE_OBJECTS_TABLE", "objects")
+SUPABASE_STATUS_FIELD = os.getenv("SUPABASE_STATUS_FIELD", "status")
+SUPABASE_URL_FIELD = os.getenv("SUPABASE_URL_FIELD", "cian_url")
+
+CIAN_STATUS_MAP = {
+    "Published": "published",
+    "Moderate": "moderate",
+    "Draft": "draft",
+    "Deactivated": "deactivated",
+    "RemovedByModerator": "removed",
+    "Refused": "refused",
+    "Blocked": "blocked",
+    "Deleted": "deleted",
+    "Sold": "sold",
+}
+
 CIAN_TIMEOUT = float(os.getenv("CIAN_API_TIMEOUT", "15"))
 
 
@@ -42,6 +60,53 @@ def _fetch_json(client: httpx.Client, path: str, *, params: dict | None = None) 
     response = client.get(path, params=params)
     response.raise_for_status()
     return response.json()
+
+
+def _map_status(status: str | None) -> str | None:
+    if not status:
+        return None
+    return CIAN_STATUS_MAP.get(status, status.lower())
+
+
+def _sync_cian_updates(offers: list[dict]) -> None:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        return
+
+    endpoint = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{SUPABASE_TABLE}"
+    headers = {
+        "apikey": SUPABASE_SERVICE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates,return=minimal",
+    }
+
+    with httpx.Client(timeout=CIAN_TIMEOUT, headers=headers) as client:
+        for offer in offers:
+            ext_id = offer.get("externalId")
+            cian_url = offer.get("url")
+            cian_status = _map_status(offer.get("status"))
+            payload: dict[str, str] = {}
+            if not ext_id or not cian_url:
+                # even если нет url, но есть статус — продолжаем
+                if not cian_status:
+                    continue
+            if cian_url:
+                payload[SUPABASE_URL_FIELD] = cian_url
+            if cian_status:
+                payload[SUPABASE_STATUS_FIELD] = cian_status
+            if not payload:
+                continue
+
+            try:
+                response = client.patch(
+                    endpoint,
+                    params={"external_id": f"eq.{ext_id}"},
+                    json=payload,
+                )
+                response.raise_for_status()
+            except httpx.HTTPError:
+                # логгирование можно добавить позже
+                continue
 
 
 def _format_dt(value: str | None) -> str:
@@ -74,6 +139,8 @@ def build_report() -> tuple[str, bool]:
 
     offers_details = order_report.get("result", {}).get("offers", [])
     images_details = images_report.get("result", {}).get("items", [])
+
+    _sync_cian_updates(offers_details)
 
     lines = ["*CIAN XML импорт*", ""]
     lines.append(f"• feed: `{info.get('activeFeedUrls', ['—'])[0] if info.get('activeFeedUrls') else '—'}`")
