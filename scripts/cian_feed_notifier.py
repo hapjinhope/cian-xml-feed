@@ -142,37 +142,40 @@ def build_report() -> tuple[str, bool]:
 
     _sync_cian_updates(offers_details)
 
-    lines = ["*CIAN · Отчёт по выгрузке*", ""]
-    lines.append(f"• Фид: `{info.get('activeFeedUrls', ['—'])[0] if info.get('activeFeedUrls') else '—'}`")
-    lines.append(f"• Заказ: `{info.get('orderId', '—')}`")
-    lines.append(f"• Проверка: {_format_dt(info.get('lastFeedCheckDate'))}")
-    lines.append(f"• Обработка: {_format_dt(info.get('lastProcessDate'))}")
-    lines.append(f"• Проблемных объявлений: `{len(offers_details)}`")
-    lines.append(f"• Проблемных фото: `{len(images_details)}`")
+    feed_url = info.get("activeFeedUrls", ["—"])
+    feed_url = feed_url[0] if feed_url else "—"
+    lines = ["*CIAN · Проблемные выгрузки*", ""]
+    lines.append(f"XML: `{feed_url}`")
+    lines.append(f"Заказ: `{info.get('orderId', '—')}`")
+    lines.append("")
 
-    ACTION_HINT = "Исправь данные объявления в Supabase и дождись следующего импорта."
+    ACTION_HINT = "Исправь данные в Supabase и дождись следующего импорта."
 
     if offers_details:
-        lines.append("")
-        lines.append("*Проблемные объявления*:")
-        for offer in offers_details[:10]:
+        lines.append("*Объявления*:")
+        for offer in offers_details[:5]:
             ext_id = offer.get("externalId", "—")
             url = offer.get("url")
             errors = offer.get("errors") or offer.get("warnings") or []
-            reason = "; ".join(errors) if errors else "Причина не указана"
+            reason = "; ".join(errors) if errors else "причина не указана"
             status = offer.get("status", "—")
-            link = f"[ссылка]({url})" if url else "ссылка недоступна"
+            link = f"[ссылка]({url})" if url else "—"
             lines.append(
                 f"• ID `{ext_id}` · статус `{status}` · {link}\n  Причина: {reason}\n  Действие: {ACTION_HINT}"
             )
+        if len(offers_details) > 5:
+            lines.append(f"… и ещё {len(offers_details) - 5}")
+        lines.append("")
 
     if images_details:
-        lines.append("")
-        lines.append("*Проблемные фото*:")
-        for item in images_details[:10]:
+        lines.append("*Фото*:")
+        for item in images_details[:3]:
             lines.append(
                 f"• ID `{item.get('externalId', '—')}` · {item.get('url','')}\n  Ошибка: {item.get('errorText','—')}"
             )
+        if len(images_details) > 3:
+            lines.append(f"… и ещё {len(images_details) - 3}")
+        lines.append("")
 
     mention_needed = bool(offers_details or images_details)
     if mention_needed and TG_ERROR_USER_ID:
