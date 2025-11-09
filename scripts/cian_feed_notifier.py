@@ -142,25 +142,42 @@ def build_report() -> tuple[str, bool]:
 
     _sync_cian_updates(offers_details)
 
-    lines = ["*CIAN XML импорт*", ""]
-    lines.append(f"• feed: `{info.get('activeFeedUrls', ['—'])[0] if info.get('activeFeedUrls') else '—'}`")
-    lines.append(f"• order id: `{info.get('orderId', '—')}`")
-    lines.append(f"• last check: {_format_dt(info.get('lastFeedCheckDate'))}")
-    lines.append(f"• last process: {_format_dt(info.get('lastProcessDate'))}")
-    lines.append(f"• offers with issues: `{len(offers_details)}`")
-    lines.append(f"• images with issues: `{len(images_details)}`")
+    lines = ["*CIAN · Отчёт по выгрузке*", ""]
+    lines.append(f"• Фид: `{info.get('activeFeedUrls', ['—'])[0] if info.get('activeFeedUrls') else '—'}`")
+    lines.append(f"• Заказ: `{info.get('orderId', '—')}`")
+    lines.append(f"• Проверка: {_format_dt(info.get('lastFeedCheckDate'))}")
+    lines.append(f"• Обработка: {_format_dt(info.get('lastProcessDate'))}")
+    lines.append(f"• Проблемных объявлений: `{len(offers_details)}`")
+    lines.append(f"• Проблемных фото: `{len(images_details)}`")
+
+    ACTION_HINT = "Исправь данные объявления в Supabase и дождись следующего импорта."
 
     if offers_details:
-        preview = ", ".join(str(item.get("externalId")) for item in offers_details[:5])
-        lines.append(f"  ↳ problem offers: `{preview}`")
-    if images_details:
-        preview_img = ", ".join(str(item.get("externalId")) for item in images_details[:5])
-        lines.append(f"  ↳ problem photos: `{preview_img}`")
+        lines.append("")
+        lines.append("*Проблемные объявления*:")
+        for offer in offers_details[:10]:
+            ext_id = offer.get("externalId", "—")
+            url = offer.get("url")
+            errors = offer.get("errors") or offer.get("warnings") or []
+            reason = "; ".join(errors) if errors else "Причина не указана"
+            status = offer.get("status", "—")
+            link = f"[ссылка]({url})" if url else "ссылка недоступна"
+            lines.append(
+                f"• ID `{ext_id}` · статус `{status}` · {link}\n  Причина: {reason}\n  Действие: {ACTION_HINT}"
+            )
 
-    mention_needed = bool(problems)
+    if images_details:
+        lines.append("")
+        lines.append("*Проблемные фото*:")
+        for item in images_details[:10]:
+            lines.append(
+                f"• ID `{item.get('externalId', '—')}` · {item.get('url','')}\n  Ошибка: {item.get('errorText','—')}"
+            )
+
+    mention_needed = bool(offers_details or images_details)
     if mention_needed and TG_ERROR_USER_ID:
         lines.append("")
-        lines.append(f"⚠️ [Ответственный](tg://user?id={TG_ERROR_USER_ID}) проверь выгрузку!")
+        lines.append(f"⚠️ [Модератор](tg://user?id={TG_ERROR_USER_ID}) проверь выгрузку!")
     elif not problems:
         lines.append("")
         lines.append("✅ Ошибок не обнаружено")
