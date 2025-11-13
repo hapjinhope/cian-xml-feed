@@ -43,8 +43,12 @@ class SupabaseClient:
         return response
 
     def fetch_objects(self) -> list[dict[str, Any]]:
-        """Return all objects rows with attached agent info when available."""
-        response = self._get("objects", params={"select": "*"})
+        """Return only published objects with attached agent info when available."""
+        params = {
+            "select": "*",
+            "status": "eq.published",
+        }
+        response = self._get("objects", params=params)
         data = response.json()
         objects: list[dict[str, Any]] = data if isinstance(data, list) else []
 
@@ -57,8 +61,12 @@ class SupabaseClient:
         return objects
 
     def count_objects(self) -> int:
-        """Return objects count using Supabase count preference."""
-        response = self._get("objects", params={"select": "id"}, prefer="count=exact")
+        """Return published objects count using Supabase count preference."""
+        params = {
+            "select": "id",
+            "status": "eq.published",
+        }
+        response = self._get("objects", params=params, prefer="count=exact")
         count_header = response.headers.get("content-range", "0-0/0")
         try:
             total = count_header.split("/")[-1]

@@ -39,12 +39,22 @@ def _ensure_supabase() -> SupabaseClient:
     return supabase_client
 
 
+def _is_published(row: dict[str, Any]) -> bool:
+    status = row.get("status")
+    if isinstance(status, str):
+        return status.strip().lower() == "published"
+    if isinstance(status, bool):
+        return bool(status)
+    return False
+
+
 @app.get("/feed.xml")
 def get_feed() -> Response:
     """Return the XML feed for CIAN."""
     client = _ensure_supabase()
     try:
-        apartments = client.fetch_objects()
+        apartments_raw = client.fetch_objects()
+        apartments = [apt for apt in apartments_raw if _is_published(apt)]
         if not apartments:
             logger.info("No apartments found, returning empty feed")
             empty = (

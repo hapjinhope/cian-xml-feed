@@ -63,6 +63,19 @@ MATERIAL_MAP = {
     "дерев": "wood",
 }
 
+
+def _map_repair_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    lower = text.lower()
+    for needle, mapped in REPAIR_MAP.items():
+        if needle in lower:
+            return mapped
+    return text
+
 def _stringify_number(value: Any) -> str | None:
     if value is None:
         return None
@@ -359,6 +372,24 @@ def _parse_parking(details: str | None, apt: dict[str, Any]) -> str | None:
     return None
 
 
+def _parse_repair_type(details: str | None, apt: dict[str, Any]) -> str | None:
+    for key in (
+        "repair_type",
+        "repair",
+        "flat_repair",
+        "apartment_repair",
+    ):
+        mapped = _map_repair_value(apt.get(key))
+        if mapped:
+            return mapped
+    if not details:
+        return None
+    match = re.search(r"Ремонт:\s*([^.]+)", details, re.IGNORECASE)
+    if match:
+        return _map_repair_value(match.group(1))
+    return None
+
+
 def build_feed(apartments: list[dict[str, Any]]) -> str:
     """Generate XML feed document."""
 
@@ -473,6 +504,10 @@ def build_feed(apartments: list[dict[str, Any]]) -> str:
         windows_view = _parse_windows(details, apt)
         if windows_view:
             ET.SubElement(obj, "WindowsViewType").text = windows_view
+
+        repair_type = _parse_repair_type(details, apt)
+        if repair_type:
+            ET.SubElement(obj, "RepairType").text = repair_type
 
         rental = apt.get("rental_conditions") or ""
         price_match = re.search(r"Цена:\s*([\d\s\u00a0]+)", rental)
