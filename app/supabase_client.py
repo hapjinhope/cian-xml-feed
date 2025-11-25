@@ -57,7 +57,11 @@ class SupabaseClient:
             for row in objects:
                 agent_id = row.get("agent_id")
                 if agent_id in agent_map:
-                    row["agent"] = agent_map[agent_id]
+                    agent = agent_map[agent_id]
+                    row["agent"] = agent
+                    if agent.get("email") and not row.get("subagent_email"):
+                        # Прокидываем почту агента, чтобы она попала в SubAgent в XML
+                        row["subagent_email"] = agent["email"]
         return objects
 
     def count_objects(self) -> int:
