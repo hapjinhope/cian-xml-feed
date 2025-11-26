@@ -85,7 +85,14 @@ class SupabaseClient:
         if not ids:
             return {}
 
-        id_list = ",".join(str(agent_id) for agent_id in ids)
+        def _quote(agent_id: str) -> str:
+            # Supabase требует кавычки для строковых значений в in.()
+            if agent_id.isdigit():
+                return agent_id
+            escaped = agent_id.replace('"', r"\"")
+            return f'"{escaped}"'
+
+        id_list = ",".join(_quote(agent_id) for agent_id in ids)
         params = {
             "id": f"in.({id_list})",
             "select": "id,name,first_name,last_name,surname,phone,email",
