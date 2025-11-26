@@ -56,8 +56,9 @@ class SupabaseClient:
         if agent_map:
             for row in objects:
                 agent_id = row.get("agent_id")
-                if agent_id in agent_map:
-                    agent = agent_map[agent_id]
+                lookup_id = str(agent_id) if agent_id not in (None, "") else None
+                if lookup_id and lookup_id in agent_map:
+                    agent = agent_map[lookup_id]
                     row["agent"] = agent
                     if agent.get("email") and not row.get("subagent_email"):
                         # Прокидываем почту агента, чтобы она попала в SubAgent в XML
@@ -79,7 +80,8 @@ class SupabaseClient:
             return 0
 
     def _load_agents(self, agent_ids: Iterable[Any]) -> dict[Any, dict[str, Any]]:
-        ids = [agent_id for agent_id in agent_ids if agent_id not in (None, "")]
+        # Нормализуем id в строку, чтобы избежать расхождений типов (int/str)
+        ids = [str(agent_id) for agent_id in agent_ids if agent_id not in (None, "")]
         if not ids:
             return {}
 
@@ -103,4 +105,4 @@ class SupabaseClient:
         if not isinstance(data, list):
             return {}
 
-        return {row.get("id"): row for row in data}
+        return {str(row.get("id")): row for row in data}
